@@ -28,7 +28,7 @@ export AW_HEADROOM_BIN_DIR="$WORK/localbin"
 PC=$((20000 + $$ % 9000)); PX=$((PC + 1))
 export AW_HEADROOM_PORT_CLAUDE="$PC" AW_HEADROOM_PORT_CODEX="$PX"
 export AW_HEADROOM_START_WAIT=20
-unset ANTHROPIC_BASE_URL OPENAI_BASE_URL
+unset ANTHROPIC_BASE_URL OPENAI_BASE_URL CLAUDE_CONFIG_DIR
 SECRET="FAKE-TOKEN-ZZ-0123456789-DO-NOT-PRINT"
 CALLS="$WORK/calls.log"; : > "$CALLS"
 
@@ -92,6 +92,8 @@ check "claude upstream: headroom's URL in settings.json falls to the default (no
 check "claude upstream: no env, no settings file: the official default" "$(CLAUDE_SETTINGS_FILE="$WORK/none.json" bash "$WRAP" upstream claude)" "https://api.anthropic.com"
 echo '{"env":{}}' > "$WORK/e.json"
 check "claude upstream: settings without a base URL: the default" "$(CLAUDE_SETTINGS_FILE="$WORK/e.json" bash "$WRAP" upstream claude)" "https://api.anthropic.com"
+mkdir -p "$WORK/pool"; echo '{"env":{"ANTHROPIC_BASE_URL":"http://pool.example"}}' > "$WORK/pool/settings.json"
+check "claude upstream: CLAUDE_CONFIG_DIR's settings.json is the user settings file" "$(env -u CLAUDE_SETTINGS_FILE CLAUDE_CONFIG_DIR="$WORK/pool" bash "$WRAP" upstream claude)" "http://pool.example"
 
 # --- upstream detection: codex ---
 check "codex upstream: the active provider's base_url" "$(bash "$WRAP" upstream codex)" "http://127.0.0.1:8317/v1"

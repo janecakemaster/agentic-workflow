@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/../install-agents.sh"
 

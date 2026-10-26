@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"
 # The installer puts its files under $AW_STATE_DIR when set, else under the HOME each case passes (a temp dir): never an inherited state dir.

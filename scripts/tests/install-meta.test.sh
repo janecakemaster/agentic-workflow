@@ -8,6 +8,7 @@
 # version is printed.
 # Run: bash scripts/tests/install-meta.test.sh
 set -uo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fail=0
 check() {

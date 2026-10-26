@@ -16,7 +16,7 @@ check() {
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 export HOME="$WORK/home"; mkdir -p "$HOME"
-unset AW_STATE_DIR AW_HOOKS_DIR CODEX_HOOKS_FILE CODEX_HOME CURSOR_HOOKS_FILE CLAUDE_SETTINGS_FILE CLAUDE_HOOKS_DIR CLAUDE_DIR SETTINGS_FILE TOOLKIT_DIR AW_DRY_RUN
+unset AW_STATE_DIR AW_HOOKS_DIR CODEX_HOOKS_FILE CODEX_HOME CURSOR_HOOKS_FILE CLAUDE_CONFIG_DIR CLAUDE_SETTINGS_FILE CLAUDE_HOOKS_DIR CLAUDE_DIR SETTINGS_FILE TOOLKIT_DIR AW_DRY_RUN
 BIN="$WORK/bin"; mkdir -p "$BIN"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/judge"; chmod +x "$BIN/judge"
 export PATH="$BIN:$PATH"
@@ -95,6 +95,28 @@ check "claude: legacy bridge-context.sh copy removed" "$([ -e "$CL/hooks/bridge-
 snap="$(jq -Sc . "$CL/settings.json")"
 q env CLAUDE_DIR="$CL" bash "$ROOT/providers/claude/install-hooks.sh"
 check "claude: legacy cleanup is idempotent" "$(jq -Sc . "$CL/settings.json")" "$snap"
+
+# ---------------- claude under CLAUDE_CONFIG_DIR ----------------
+# Base hooks, a lever and the probe all land in the relocated dir, their commands name it, and ~/.claude stays empty.
+CP="$WORK/claude-pool"; mkdir -p "$CP"; echo '{}' > "$CP/settings.json"
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/providers/claude/install-hooks.sh"
+check "claude-config-dir: Bash safety group names the dir" "$(jq -c '[.hooks.PreToolUse[] | select(.matcher=="Bash") | .hooks[].command]' "$CP/settings.json")" \
+  "$(jq -nc --arg d "$CP/hooks" '[$d + "/block-destructive.sh", $d + "/block-push-main.sh", $d + "/detect-secrets.sh", $d + "/rtk-rewrite.sh"]')"
+check "claude-config-dir: SessionStart names the dir" "$(jq -c '[.hooks.SessionStart[].hooks[].command]' "$CP/settings.json")" \
+  "$(jq -nc --arg d "$CP/hooks" '[$d + "/git-context.sh", $d + "/prism-context.sh"]')"
+check "claude-config-dir: scripts copied to the dir" "$([ -x "$CP/hooks/block-destructive.sh" ] && [ -f "$CP/hooks/lib/failopen.sh" ] && echo y)" "y"
+cmd="$(jq -r '.hooks.PreToolUse[] | select(.matcher=="Bash") | .hooks[0].command' "$CP/settings.json")"
+echo '{"tool_name":"Bash","tool_input":{"command":"git clean -fd"}}' | sh -c "$cmd" > /dev/null 2>&1; rc=$?
+check "claude-config-dir: installed command runs and blocks git clean -f (exit 2)" "$rc" "2"
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/scripts/install-done-gate.sh"
+check "claude-config-dir: lever installs into the dir" "$(jq -r '.hooks.Stop[].hooks[].command | select(endswith("# aw:done-gate"))' "$CP/settings.json")" "$CP/hooks/done-gate.sh # aw:done-gate"
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/scripts/probe.sh" on
+check "claude-config-dir: probe command names the dir" "$(jq -r '.hooks.Stop[].hooks[].command | select(endswith("# aw:probe"))' "$CP/settings.json")" "$CP/hooks/probe-log.sh Stop # aw:probe"
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/scripts/probe.sh" off
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/scripts/install-done-gate.sh" --uninstall
+q env CLAUDE_CONFIG_DIR="$CP" bash "$ROOT/providers/claude/install-hooks.sh" --uninstall
+check "claude-config-dir: uninstall removes every entry it wrote" "$(jq -c . "$CP/settings.json")" '{"hooks":{}}'
+check "claude-config-dir: nothing written under ~/.claude" "$([ -e "$HOME/.claude" ] && echo written || echo none)" "none"
 
 # ---------------- lever installers --provider ----------------
 rm -f "$CODEX_FILE" "$CURSOR_FILE"

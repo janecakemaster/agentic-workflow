@@ -2,15 +2,17 @@
 # Turns the hook-input probe (cheap-agent-harness rollout step 0.5) on or off.
 # Usage: scripts/probe.sh [--provider claude|codex|cursor] on|off|status
 #
-# claude (default): ~/.claude/settings.json, logs to ~/.agentic-workflow/probe/
+# claude (default): ~/.claude/settings.json ($CLAUDE_CONFIG_DIR/settings.json when set), logs to ~/.agentic-workflow/probe/
 # codex:  ~/.codex/hooks.json,  logs to ~/.agentic-workflow/probe/codex/
 # cursor: ~/.cursor/hooks.json, logs to ~/.agentic-workflow/probe/cursor/
 #         (through adapters/cursor.sh --raw: raw stdin is logged, and the
 #         adapter answers Cursor's permission hooks with "allow")
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+# shellcheck source=../config/lib/claude-dir.sh
+source "$ROOT/config/lib/claude-dir.sh"
+SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
 # shellcheck source=../config/lib/merge-hook.sh
 source "$ROOT/config/lib/merge-hook.sh"
 # shellcheck source=../config/hooks/adapters/install-lib.sh
@@ -46,9 +48,12 @@ entry() {
   local cmd
   case "$AW_PROVIDER" in
     claude)
-      local hook_path="~/.claude/hooks/probe-log.sh"
+      # ~/.claude/hooks/... by default; the copied script's real path under CLAUDE_HOOKS_DIR or CLAUDE_CONFIG_DIR.
+      local hook_path
       if [ -n "${CLAUDE_HOOKS_DIR:-}" ]; then
         hook_path="$HOOKS_DIR/probe-log.sh"
+      else
+        hook_path="$(aw_claude_dir_ref "$(aw_claude_dir)")/hooks/probe-log.sh"
       fi
       cmd="$hook_path $1 # aw:probe"
       ;;

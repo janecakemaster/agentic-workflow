@@ -23,7 +23,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOOLKIT_DIR="$SCRIPT_DIR"
-CLAUDE_DIR="$HOME/.claude"
+# Claude Code's config dir: $CLAUDE_CONFIG_DIR when set, else ~/.claude (config/lib/claude-dir.sh).
+# shellcheck source=config/lib/claude-dir.sh
+source "$SCRIPT_DIR/config/lib/claude-dir.sh"
+CLAUDE_DIR="$(aw_claude_dir)"
 
 ALL_PROVIDERS="claude codex cursor"
 
@@ -80,7 +83,7 @@ if [ "${1:-}" = "--profile" ]; then
   source "$SCRIPT_DIR/config/lib/diff-skill-pairs.sh"
   source "$SCRIPT_DIR/config/lib/apply-profile.sh"
 
-  AW_SKILLS_DIR="$HOME/.claude/skills"
+  AW_SKILLS_DIR="$CLAUDE_DIR/skills"
   WA_SKILLS_DIR="$TARGET_DIR/.claude/skills"
 
   echo "=== diff-skill-pairs: checking the 14 known camelCase/kebab-case skill pairs ==="
@@ -129,7 +132,7 @@ if [ "${1:-}" = "--profile" ]; then
   apply_profile "$SETTINGS_FILE" "$PROFILE_FILE" "$MANIFEST_FILE"
   echo "applied $PROFILE_NAME profile to $SETTINGS_FILE"
   echo "=== resolved skillOverrides (user > shared-project > local) ==="
-  jq -s '.[0] * .[1] * .[2]' "$HOME/.claude/settings.json" "$TARGET_DIR/.claude/settings.json" "$SETTINGS_FILE" 2>/dev/null | jq '.skillOverrides' || true
+  jq -s '.[0] * .[1] * .[2]' "$CLAUDE_DIR/settings.json" "$TARGET_DIR/.claude/settings.json" "$SETTINGS_FILE" 2>/dev/null | jq '.skillOverrides' || true
   exit 0
 fi
 
@@ -194,7 +197,7 @@ export AW_PROVIDERS="$PROVIDERS"
 
 # --- --install-agents ---
 # Installs config/agents/*.md (lean pinned-model agent types) for each provider:
-#   claude → ~/.claude/agents/*.md (verbatim)
+#   claude → ~/.claude/agents/*.md (verbatim; $CLAUDE_CONFIG_DIR/agents when set)
 #   codex  → ~/.codex/agents/*.toml (translated)
 #   cursor → ~/.cursor/agents/*.md (translated frontmatter)
 # Ownership tracked in ~/.agentic-workflow/managed/agents[-<provider>].json.
@@ -240,8 +243,8 @@ aw_dry && echo "  mode:      DRY RUN — nothing will be written"
 echo ""
 
 # Also clean up the old impeccable-cache directory from the previous setup.sh era
-if [ -d "$HOME/.claude/impeccable-cache" ]; then
-  aw_run rm -rf "$HOME/.claude/impeccable-cache"
+if [ -d "$CLAUDE_DIR/impeccable-cache" ]; then
+  aw_run rm -rf "$CLAUDE_DIR/impeccable-cache"
   echo "  removed legacy impeccable-cache directory"
 fi
 

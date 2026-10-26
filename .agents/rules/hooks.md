@@ -18,6 +18,8 @@ Safety hooks run automatically via each provider's hook system (Claude Code, Cod
 | Provider | Hook config | Adapter | Installer |
 |----------|-------------|---------|-----------|
 | Claude Code | `~/.claude/settings.json` `hooks` (`PreToolUse`, `SessionStart`, …) | none — canonical scripts run directly from `~/.claude/hooks/` | `providers/claude/install-hooks.sh` |
+
+Claude Code's `~/.claude` is `$CLAUDE_CONFIG_DIR` when that is set (`config/lib/claude-dir.sh`: `aw_claude_dir`, `aw_claude_json`, `aw_claude_dir_ref`). Every Claude installer resolves it there, copies its scripts into that dir's `hooks/`, and writes commands that name it: `~/.claude/hooks/<script>` while `CLAUDE_CONFIG_DIR` is unset, the absolute `$CLAUDE_CONFIG_DIR/hooks/<script>` otherwise. A new Claude installer sources `claude-dir.sh` (or `install-lib.sh`, which does) instead of spelling `$HOME/.claude`.
 | Codex | `~/.codex/hooks.json` | `config/hooks/adapters/codex.sh` | `providers/codex/install-hooks.sh` |
 | Cursor | `~/.cursor/hooks.json` (`beforeShellExecution`, `sessionStart`, `stop`, …) | `config/hooks/adapters/cursor.sh` | `providers/cursor/install-hooks.sh` |
 

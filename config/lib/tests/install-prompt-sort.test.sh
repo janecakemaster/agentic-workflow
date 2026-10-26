@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for the prompt-sort entry that scripts/install-judge.sh --hook-only installs.
 set -euo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"
 

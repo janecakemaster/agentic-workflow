@@ -29,7 +29,7 @@
 #   AW_HEADROOM_KEEP=1     leave the proxy running after the last wrapped session exits
 #   AW_HEADROOM_START_WAIT seconds to wait for the proxy's /health (default 120)
 #   AW_HEADROOM_ARGS       extra arguments for `headroom proxy`, word-split
-#   CLAUDE_SETTINGS_FILE   Claude settings (default ~/.claude/settings.json)
+#   CLAUDE_SETTINGS_FILE   Claude settings (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)
 #   CODEX_HOME             Codex home (default ~/.codex); its config.toml is read
 #   AW_STATE_DIR           state root (default ~/.agentic-workflow); proxies live under headroom/<provider>/
 set -uo pipefail
@@ -65,7 +65,8 @@ is_headroom_url() {
 }
 
 claude_upstream() {
-  local u settings="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
+  # Copied alone onto PATH, so config/lib/claude-dir.sh's rule is inline: CLAUDE_CONFIG_DIR when set, else ~/.claude.
+  local u settings="${CLAUDE_SETTINGS_FILE:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json}"
   u="${ANTHROPIC_BASE_URL:-}"
   if [ -n "$u" ] && ! is_headroom_url "$u"; then norm_url "$u"; return; fi
   if [ -f "$settings" ] && command -v jq >/dev/null 2>&1; then

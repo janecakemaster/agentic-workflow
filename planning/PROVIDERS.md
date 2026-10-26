@@ -10,7 +10,7 @@ provider. Skill text names capabilities, not tools — see `skills/_shared/capab
 |---|---|---|---|
 | CLI | `claude` 2.1.284 | `codex` 0.158.0 | `cursor-agent` 2026.09.02 |
 | Headless run | `claude -p` | `codex exec` | `cursor-agent -p` |
-| User config | `~/.claude/settings.json` | `~/.codex/config.toml` | `~/.cursor/cli-config.json`, `~/.cursor/mcp.json` |
+| User config | `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when set; the installers follow it, and `~/.claude.json` becomes `$CLAUDE_CONFIG_DIR/.claude.json`) | `~/.codex/config.toml` | `~/.cursor/cli-config.json`, `~/.cursor/mcp.json` |
 | Skills dir (user) | `~/.claude/skills/<name>/SKILL.md` | `~/.codex/skills/` (toolkit installs here; Codex also reads `~/.agents/skills/`, left alone because Cursor-owned dirs live there) | `~/.cursor/skills/` (toolkit installs here); also reads `~/.claude/skills`, `~/.codex/skills`, `~/.grok/skills`, `~/.agents/skills`, dedup by name |
 | Custom agents | `~/.claude/agents/*.md` | `~/.codex/agents/<name>.toml` (`name`, `description`, `developer_instructions`; `model` omitted, Claude pin mapped to `model_reasoning_effort`) | `~/.cursor/agents/*.md` (real files; `model: fast\|inherit`, `readonly`) |
 | Ask user | `AskUserQuestion` | `request_user_input` | `AskQuestion` |

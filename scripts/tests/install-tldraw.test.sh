@@ -21,7 +21,7 @@ trap 'rm -rf "$WORK"' EXIT
 export HOME="$WORK/home"; mkdir -p "$HOME" "$WORK/bin" "$WORK/release"
 export AW_TLDRAW_DIR="$WORK/share" AW_TLDRAW_BIN_DIR="$WORK/localbin" AW_TLDRAW_APP="$WORK/Applications/tldraw offline.app"
 export AW_TLDRAW_URL_BASE="file://$WORK/release"
-unset AW_DRY_RUN AW_TLDRAW_SHA256
+unset AW_DRY_RUN AW_TLDRAW_SHA256 CLAUDE_CONFIG_DIR
 CALLS="$WORK/calls.log"; : > "$CALLS"
 export FAKE_CALLS="$CALLS"
 
@@ -94,6 +94,11 @@ out="$(AW_DEPS_OS=Darwin run)"
 contains "marked skills are reported per provider" "$out" "agent skills installed for: claude codex"
 lacks "installed skills drop the next step" "$out" "next step"
 check "the skill files are never written" "$(cat "$HOME/.cursor/skills/tldraw-offline/SKILL.md")" "# a hand-written skill, no marker"
+mkdir -p "$WORK/pool/skills/tldraw-offline"
+cp "$HOME/.claude/skills/tldraw-offline/SKILL.md" "$WORK/pool/skills/tldraw-offline/SKILL.md"
+mv "$HOME/.claude/skills/tldraw-offline/SKILL.md" "$WORK/claude-skill.md"
+out="$(CLAUDE_CONFIG_DIR="$WORK/pool" AW_DEPS_OS=Darwin run)"
+contains "a skill in CLAUDE_CONFIG_DIR counts for claude" "$out" "agent skills installed for: claude codex"
 rm -rf "$HOME/.claude" "$HOME/.codex" "$HOME/.cursor"
 
 # --- Linux ---

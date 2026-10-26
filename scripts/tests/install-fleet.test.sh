@@ -14,6 +14,7 @@ check() {
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 export HOME="$WORK/home"; mkdir -p "$HOME"
+unset CLAUDE_CONFIG_DIR
 export AW_STATE_DIR="$WORK/state"
 export CLAUDE_SETTINGS_FILE="$WORK/claude/settings.json"
 export CLAUDE_HOOKS_DIR="$WORK/claude/hooks"
@@ -91,4 +92,20 @@ check "setup.sh --with-fleet --dry-run: prints the install for each provider" "$
 OUT="$(run_setup)"
 check "setup.sh --dry-run without the flag: no fleet install" "$(printf '%s' "$OUT" | grep -c 'install-fleet')" "0"
 check "setup.sh --dry-run wrote nothing under the temp HOME" "$([ -e "$WORK/shome/.claude/settings.json" ] && echo written || echo none)" "none"
+
+# --- CLAUDE_CONFIG_DIR relocates Claude Code's config dir: the install goes there and never to ~/.claude ---
+POOL="$WORK/pool"
+OUT="$(env -u CLAUDE_SETTINGS_FILE -u CLAUDE_HOOKS_DIR CLAUDE_CONFIG_DIR="$POOL" bash "$INSTALL" --provider claude 2>&1)"; RC=$?
+check "CLAUDE_CONFIG_DIR: install exit 0" "$RC" "0"
+check "CLAUDE_CONFIG_DIR: 7 entries in its settings.json" "$(fleet_entries "$POOL/settings.json")" "7"
+check "CLAUDE_CONFIG_DIR: the command runs the script copied there" "$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$POOL/settings.json")" "$POOL/hooks/fleet-state.sh # aw:fleet"
+check "CLAUDE_CONFIG_DIR: the script is copied there" "$([ -x "$POOL/hooks/fleet-state.sh" ] && echo yes || echo no)" "yes"
+check "CLAUDE_CONFIG_DIR: nothing written under ~/.claude" "$([ -e "$HOME/.claude" ] && echo written || echo none)" "none"
+POOL="$WORK/pool-setup"
+OUT="$(CLAUDE_CONFIG_DIR="$POOL" run_setup)"
+check "setup.sh --dry-run under CLAUDE_CONFIG_DIR: skills, settings and hooks go to the dir" \
+  "$(for t in "Installing skills into $POOL/skills" "$POOL/settings.json with its ~/.claude/ commands pointed at $POOL/" "→ $POOL/hooks and merge hooks into $POOL/settings.json"; do printf '%s' "$OUT" | grep -qF "$t" && printf y || printf n; done)" "yyy"
+check "setup.sh --dry-run under CLAUDE_CONFIG_DIR: never names the default dir" "$(printf '%s' "$OUT" | grep -c "$WORK/shome/\.claude")" "0"
+check "setup.sh --dry-run under CLAUDE_CONFIG_DIR: nothing written there or under ~/.claude" \
+  "$([ -e "$WORK/shome/.claude" ] || [ -e "$POOL" ] && echo written || echo none)" "none"
 exit $fail

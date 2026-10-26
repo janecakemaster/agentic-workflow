@@ -84,8 +84,8 @@ if [ "$DO_HOOK" = "1" ] && [ "$AW_PROVIDER" != "claude" ]; then
     fi
   fi
 elif [ "$DO_HOOK" = "1" ]; then
-  SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-  HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+  SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+  HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
   # shellcheck source=config/lib/merge-hook.sh
   source "$SCRIPT_DIR/config/lib/merge-hook.sh"
   mkdir -p "$HOOKS_DIR"

@@ -2,18 +2,22 @@
 # Claude Code base hooks: safety PreToolUse(Bash) chain + SessionStart context.
 # Moved verbatim from setup.sh's "Safety Hooks" section — identical behavior:
 # copies config/hooks/*.sh to ~/.claude/hooks/ and merges the entries into
-# ~/.claude/settings.json. Lever hooks (context-guard, done-gate, ...) stay in
+# ~/.claude/settings.json (~/.claude = $CLAUDE_CONFIG_DIR when set). Lever hooks (context-guard, done-gate, ...) stay in
 # scripts/install-*.sh behind their own approval step.
 #
 # Usage: providers/claude/install-hooks.sh [--uninstall]
 # Env:   TOOLKIT_DIR   (default: repo root)
-#        CLAUDE_DIR    (default: ~/.claude)
+#        CLAUDE_DIR    (default: $CLAUDE_CONFIG_DIR, else ~/.claude)
 #        SETTINGS_FILE (default: $CLAUDE_DIR/settings.json)
 set -euo pipefail
 SCRIPT_DIR="${TOOLKIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+# shellcheck source=../../config/lib/claude-dir.sh
+source "$SCRIPT_DIR/config/lib/claude-dir.sh"
+CLAUDE_DIR="${CLAUDE_DIR:-$(aw_claude_dir)}"
 SETTINGS_FILE="${SETTINGS_FILE:-$CLAUDE_DIR/settings.json}"
 HOOKS_DIR="$CLAUDE_DIR/hooks"
+# The hooks dir as the commands name it: ~/.claude/hooks while CLAUDE_CONFIG_DIR is unset, else the absolute dir.
+HOOKS_REF="$(aw_claude_dir_ref "$CLAUDE_DIR")/hooks"
 
 if [ "${AW_DRY_RUN:-0}" = "1" ]; then
   echo "  [dry-run] would ${1:+run $1 on }copy config/hooks/*.sh → $HOOKS_DIR and merge hooks into $SETTINGS_FILE"
@@ -26,8 +30,9 @@ if [ "${1:-}" = "--uninstall" ]; then
   # Script files in ~/.claude/hooks/ are left in place: lever installers
   # reference the same copies.
   if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
-    jq '
-      def ours: test("/\\.claude/hooks/(block-destructive|block-push-main|detect-secrets|rtk-rewrite|git-context|prism-context)\\.sh$");
+    jq --arg ref "$HOOKS_REF" '
+      def ours: . as $c | ["block-destructive","block-push-main","detect-secrets","rtk-rewrite","git-context","prism-context"]
+        | any(. as $n | ($c | test("/\\.claude/hooks/" + $n + "\\.sh$")) or $c == ($ref + "/" + $n + ".sh"));
       if .hooks then
         .hooks.PreToolUse = [ .hooks.PreToolUse[]? | select((.matcher == "Bash" and ([.hooks[]? | (.command // "") | ours] | all)) | not) ]
         | .hooks.SessionStart = [ .hooks.SessionStart[]? | .hooks = [ .hooks[]? | select((.command // "") | ours | not) ] | select(.hooks | length > 0) ]
@@ -59,7 +64,7 @@ cp "$SCRIPT_DIR/config/lib/failopen.sh" "$HOOKS_DIR/lib/failopen.sh"
 # Merge safety hooks into existing settings.json
 if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
   # Replace any existing Bash matcher entry with the canonical one (fully idempotent, handles version drift)
-  HOOK_BASH_ENTRY='{"matcher":"Bash","hooks":[{"type":"command","command":"~/.claude/hooks/block-destructive.sh"},{"type":"command","command":"~/.claude/hooks/block-push-main.sh"},{"type":"command","command":"~/.claude/hooks/detect-secrets.sh"},{"type":"command","command":"~/.claude/hooks/rtk-rewrite.sh"}]}'
+  HOOK_BASH_ENTRY="$(jq -nc --arg d "$HOOKS_REF" '{matcher: "Bash", hooks: [("block-destructive", "block-push-main", "detect-secrets", "rtk-rewrite") | {type: "command", command: "\($d)/\(.).sh"}]}')"
   jq --argjson entry "$HOOK_BASH_ENTRY" \
     '.hooks.PreToolUse = ([.hooks.PreToolUse[]? | select(.matcher != "Bash")] + [$entry])' \
     "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
@@ -68,31 +73,17 @@ if [ -f "$SETTINGS_FILE" ] && command -v jq &>/dev/null; then
 
   # Add git-context SessionStart hook if not already present
   if ! jq -e '.hooks.SessionStart[]? | select(.hooks[]?.command | test("git-context"))' "$SETTINGS_FILE" &>/dev/null; then
-    HOOK_ENTRY='[{"hooks":[{"type":"command","command":"~/.claude/hooks/git-context.sh"}]}]'
-    if jq -e 'has("hooks") and (.hooks | has("SessionStart"))' "$SETTINGS_FILE" &>/dev/null; then
-      jq --argjson entry '{"hooks":[{"type":"command","command":"~/.claude/hooks/git-context.sh"}]}' '.hooks.SessionStart += [$entry]' \
-        "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
-        && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    else
-      jq --argjson entries "$HOOK_ENTRY" '.hooks.SessionStart = $entries' \
-        "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
-        && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    fi
+    jq --arg c "$HOOKS_REF/git-context.sh" '.hooks.SessionStart += [{hooks: [{type: "command", command: $c}]}]' \
+      "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
+      && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
     echo "  hooks.SessionStart: git-context added"
   fi
 
   # Add prism-context SessionStart hook if not already present
   if ! jq -e '.hooks.SessionStart[]? | select(.hooks[]?.command | test("prism-context"))' "$SETTINGS_FILE" &>/dev/null; then
-    HOOK_ENTRY='[{"hooks":[{"type":"command","command":"~/.claude/hooks/prism-context.sh"}]}]'
-    if jq -e 'has("hooks") and (.hooks | has("SessionStart"))' "$SETTINGS_FILE" &>/dev/null; then
-      jq --argjson entry '{"hooks":[{"type":"command","command":"~/.claude/hooks/prism-context.sh"}]}' '.hooks.SessionStart += [$entry]' \
-        "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
-        && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    else
-      jq --argjson entries "$HOOK_ENTRY" '.hooks.SessionStart = $entries' \
-        "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
-        && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
-    fi
+    jq --arg c "$HOOKS_REF/prism-context.sh" '.hooks.SessionStart += [{hooks: [{type: "command", command: $c}]}]' \
+      "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
+      && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
     echo "  hooks.SessionStart: prism-context added"
   fi
 

@@ -8,7 +8,7 @@
 #   other  a skip line
 #
 # The agent side is the app's own: Develop → Install Agent Skills writes the `tldraw-offline` skill to ~/skills and to
-# each provider's skills dir (~/.claude, ~/.codex, ~/.cursor, ...), plus a SubagentStart hook and the `tq.mjs` helper that
+# each provider's skills dir (~/.claude or $CLAUDE_CONFIG_DIR, ~/.codex, ~/.cursor, ...), plus a SubagentStart hook and the `tq.mjs` helper that
 # call the app's loopback agent API. Only the app can do that (there is no command line for it), so this script never
 # writes those files; it looks for the app's install marker and, when no provider has it, prints the step to take.
 # setup.sh's skill cleanup only touches links into this toolkit, so a re-run leaves the app's skills alone.
@@ -105,9 +105,12 @@ esac
 [ "$app_ok" = "1" ] || exit 0
 
 # The agent skills: installed by the app, so only checked here.
+# Claude's skills are looked for in CLAUDE_CONFIG_DIR too, when it relocates the config dir.
+has_skill() { grep -qs "$SKILL_MARKER" "$1/skills/tldraw-offline/SKILL.md"; }
 skills=""
-for d in "$HOME/.claude" "$HOME/.codex" "$HOME/.cursor"; do
-  if grep -qs "$SKILL_MARKER" "$d/skills/tldraw-offline/SKILL.md"; then skills="$skills ${d##*/.}"; fi
+if has_skill "$HOME/.claude" || { [ -n "${CLAUDE_CONFIG_DIR:-}" ] && has_skill "$CLAUDE_CONFIG_DIR"; }; then skills=" claude"; fi
+for d in codex cursor; do
+  if has_skill "$HOME/.$d"; then skills="$skills $d"; fi
 done
 if [ -n "$skills" ]; then
   echo "  tldraw: agent skills installed for:$skills"

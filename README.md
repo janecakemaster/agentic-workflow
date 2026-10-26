@@ -102,6 +102,8 @@ The toolkit treats Claude Code, Codex, and Cursor as equal hosts. `setup.sh` ins
 | Judge model provider | `claude-cli` | `codex-cli` | `cursor-cli` |
 | Scorer transcript source | Yes | Yes | Involvement only (no token/cost data) |
 | Statusline + shell integration | Yes | — | — |
+
+For Claude Code, `~/.claude` throughout this README is Claude Code's config dir: when `CLAUDE_CONFIG_DIR` is set, `setup.sh` and every lever installer put skills, settings, statusline, shell integration and hooks in `$CLAUDE_CONFIG_DIR` instead, the commands they write into its `settings.json` name that directory, and MCP state is read from `$CLAUDE_CONFIG_DIR/.claude.json`. Run `setup.sh` with the same `CLAUDE_CONFIG_DIR` you run `claude` with.
 | Plugin marketplaces | Yes | — | — |
 
 The per-provider paths, tool names, and hook event names are recorded in [`planning/PROVIDERS.md`](planning/PROVIDERS.md). The capability-to-tool map that skills rely on lives in [`skills/_shared/capabilities.md`](skills/_shared/capabilities.md).

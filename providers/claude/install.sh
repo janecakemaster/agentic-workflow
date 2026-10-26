@@ -9,8 +9,14 @@
 #   ~/.claude/hooks/*        via providers/claude/install-hooks.sh
 #   ~/.claude/agents/*.md    via --install-agents
 #   MCP servers registered with `claude mcp add --scope user`
+#
+# ~/.claude above is Claude Code's config dir: $CLAUDE_CONFIG_DIR when set (config/lib/claude-dir.sh), and the root
+# dotfile ~/.claude.json is then $CLAUDE_CONFIG_DIR/.claude.json. settings.json commands keep the ~/.claude/ form
+# while CLAUDE_CONFIG_DIR is unset and name the absolute dir otherwise, so each one runs the script that was copied.
 
-CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+# shellcheck source=../../config/lib/claude-dir.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/config/lib/claude-dir.sh"
+CLAUDE_DIR="${CLAUDE_DIR:-$(aw_claude_dir)}"
 
 claude_detect() { aw_has claude; }
 claude_skills_dir() { echo "$CLAUDE_DIR/skills"; }
@@ -19,14 +25,23 @@ claude_agents_dir() { echo "$CLAUDE_DIR/agents"; }
 claude_install_settings() {
   echo ""
   echo "Installing Claude Code settings..."
-  local settings="$CLAUDE_DIR/settings.json"
+  local settings="$CLAUDE_DIR/settings.json" ref
+  ref="$(aw_claude_dir_ref "$CLAUDE_DIR")"
   if [ -f "$settings" ]; then
     echo "  settings.json already exists."
     echo "  Current file will NOT be overwritten."
     echo "  Compare manually: diff $settings $TOOLKIT_DIR/config/settings.json"
   else
     aw_run mkdir -p "$CLAUDE_DIR"
-    aw_run cp "$TOOLKIT_DIR/config/settings.json" "$settings"
+    if [ "$ref" = '~/.claude' ]; then
+      aw_run cp "$TOOLKIT_DIR/config/settings.json" "$settings"
+    elif aw_dry; then
+      echo "  [dry-run] would copy $TOOLKIT_DIR/config/settings.json to $settings with its ~/.claude/ commands pointed at $ref/"
+    else
+      # The template's commands name ~/.claude/<script>; here the scripts are copied to $CLAUDE_DIR instead.
+      jq --arg ref "$ref" 'walk(if type == "string" and startswith("~/.claude/") then $ref + .[9:] else . end)' \
+        "$TOOLKIT_DIR/config/settings.json" > "$settings"
+    fi
     echo "  settings.json: copied"
   fi
 
@@ -46,6 +61,9 @@ claude_install_settings() {
   # Per-window: walks up to this session's own tty and signals only the shell that wrote
   # ~/.claude/shell_pid.d/<tty>. No pid file is shared between windows.
   local WINCH_CMD='p=$PPID; for i in 1 2 3 4 5 6 7 8; do o=$(ps -o ppid=,tty= -p $p 2>/dev/null); set -- $o; t=$2; case $t in ""|"??"|-) p=$1;; *) f="$HOME/.claude/shell_pid.d/$t"; [ -f "$f" ] && kill -WINCH "$(cat "$f")" 2>/dev/null; break;; esac; done; '
+  # Outside the default dir the pid files live where the shell integration below writes them.
+  local home_dir='$HOME/.claude/'
+  [ "$ref" = '~/.claude' ] || WINCH_CMD="${WINCH_CMD%%"$home_dir"*}$CLAUDE_DIR/${WINCH_CMD#*"$home_dir"}"
   local legacy_jq='[.hooks.Stop[]?, .hooks.PreToolUse[]? | .hooks[]? | (.command // "") | select(contains("$HOME/.claude/shell_pid\"") and (contains("# aw:") | not))] | length'
   local legacy_n
   legacy_n=$(jq "$legacy_jq" "$settings" 2>/dev/null || echo 0)
@@ -57,7 +75,7 @@ claude_install_settings() {
 
   # Add statusLine key if absent (use has() so null values are not re-merged)
   if ! jq -e 'has("statusLine")' "$settings" &>/dev/null; then
-    jq '. + {"statusLine": {"type": "command", "command": "~/.claude/statusline.sh"}}' \
+    jq --arg c "$ref/statusline.sh" '. + {"statusLine": {"type": "command", "command": $c}}' \
       "$settings" > "$settings.tmp" && mv "$settings.tmp" "$settings"
     echo "  statusLine config added to existing settings.json"
   fi
@@ -88,7 +106,8 @@ claude_install_shell_integration() {
     return 0
   fi
 
-  local si_file="$CLAUDE_DIR/shell-integration.sh" si_tmp
+  local si_file="$CLAUDE_DIR/shell-integration.sh" si_tmp ref
+  ref="$(aw_claude_dir_ref "$CLAUDE_DIR")"
   si_tmp="$(mktemp)"
   cat > "$si_tmp" << 'SHELL_EOF'
 # Claude Code shell integration — written by Agentic Workflow setup.sh
@@ -128,6 +147,14 @@ fi
 _claude_update_width
 SHELL_EOF
 
+  # Outside the default dir the width and pid files go to that dir, written in as a literal: this file runs in the
+  # user's shell, which need not have CLAUDE_CONFIG_DIR set. statusline.sh and the aw:winch hooks read the same dir.
+  if [ "$ref" != '~/.claude' ]; then
+    local sed_dir
+    sed_dir="$(printf '%s' "$CLAUDE_DIR" | sed 's/[\\|&]/\\&/g')"
+    sed "s|\\\$HOME/\\.claude/|$sed_dir/|g; s|~/\\.claude/|$sed_dir/|g" "$si_tmp" > "$si_tmp.dir" && mv "$si_tmp.dir" "$si_tmp"
+  fi
+
   if cmp -s "$si_tmp" "$si_file" 2>/dev/null; then
     echo "  shell-integration.sh: already up to date (skipped)"
   else
@@ -137,10 +164,16 @@ SHELL_EOF
   rm -f "$si_tmp"
 
   local line='[ -f ~/.claude/shell-integration.sh ] && source ~/.claude/shell-integration.sh'
+  local marker='source ~/.claude/shell-integration.sh' si_q
+  if [ "$ref" != '~/.claude' ]; then
+    si_q="$(printf '%q' "$si_file")"
+    line="[ -f $si_q ] && source $si_q"
+    marker="source $si_q"
+  fi
   local rc added=""
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     [ -f "$rc" ] || continue
-    if ! grep -qF 'source ~/.claude/shell-integration.sh' "$rc" 2>/dev/null; then
+    if ! grep -qF "$marker" "$rc" 2>/dev/null; then
       printf '\n# Claude Code statusline width sync\n%s\n' "$line" >> "$rc"
       added="$added $rc"
       echo "  Added to $rc"
@@ -201,7 +234,8 @@ claude_install_hooks() {
 
 claude_mcp_present() {
   local name="$1"
-  if [ -f "$HOME/.claude.json" ] && jq -e --arg n "$name" '.mcpServers[$n] != null' "$HOME/.claude.json" &>/dev/null; then
+  local cfg; cfg="$(aw_claude_json)"
+  if [ -f "$cfg" ] && jq -e --arg n "$name" '.mcpServers[$n] != null' "$cfg" &>/dev/null; then
     return 0
   fi
   # `claude mcp get` health-checks and may rewrite ~/.claude.json; skip it in dry-run.
@@ -217,10 +251,11 @@ claude_mcp_add() {
 }
 
 # A retired server can sit in user scope and in local scope under any project (old installs ran `claude mcp add`
-# without --scope from the repo), all in ~/.claude.json. Read it with jq so dry-run sees every scope too.
+# without --scope from the repo), all in ~/.claude.json ($CLAUDE_CONFIG_DIR/.claude.json when set). Read it with jq so dry-run sees every scope too.
 claude_mcp_local_projects() {
-  [ -f "$HOME/.claude.json" ] || return 0
-  jq -r --arg n "$1" '(.projects // {}) | to_entries[] | select(.value.mcpServers[$n] != null) | .key' "$HOME/.claude.json"
+  local cfg; cfg="$(aw_claude_json)"
+  [ -f "$cfg" ] || return 0
+  jq -r --arg n "$1" '(.projects // {}) | to_entries[] | select(.value.mcpServers[$n] != null) | .key' "$cfg"
 }
 
 # The local entries the CLI can remove: under a directory that still exists and, inside a git repo, keyed at the main
@@ -239,7 +274,7 @@ claude_mcp_removable_projects() {
 
 # Present = a user entry, or a local one the CLI can remove.
 claude_mcp_present_any_scope() {
-  jq -e --arg n "$1" '.mcpServers[$n] != null' "$HOME/.claude.json" &>/dev/null && return 0
+  jq -e --arg n "$1" '.mcpServers[$n] != null' "$(aw_claude_json)" &>/dev/null && return 0
   [ -n "$(claude_mcp_removable_projects "$1")" ]
 }
 
@@ -249,7 +284,7 @@ claude_mcp_remove() {
   while IFS= read -r proj; do
     (cd "$proj" && aw_run claude mcp remove --scope local "$AW_MCP_NAME") || rc=1
   done < <(claude_mcp_removable_projects "$AW_MCP_NAME")
-  if jq -e --arg n "$AW_MCP_NAME" '.mcpServers[$n] != null' "$HOME/.claude.json" &>/dev/null; then
+  if jq -e --arg n "$AW_MCP_NAME" '.mcpServers[$n] != null' "$(aw_claude_json)" &>/dev/null; then
     aw_run claude mcp remove --scope user "$AW_MCP_NAME" || rc=1
   fi
   return "$rc"

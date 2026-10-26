@@ -6,8 +6,10 @@
 # violate that. Split out in the style of install-context-guard.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+# shellcheck source=../config/lib/claude-dir.sh
+source "$ROOT/config/lib/claude-dir.sh"
+SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
 STATE_DIR="${AW_STATE_DIR:-$HOME/.agentic-workflow}"
 JUDGE_BIN="${AW_JUDGE_BIN:-judge}"
 # shellcheck source=../config/lib/merge-hook.sh

@@ -14,7 +14,7 @@ setup_env() {
   mkdir -p "$HOME"
   export TOOLKIT_DIR="$ROOT"
   export AW_DRY_RUN=0
-  unset AW_STATE_ROOT AW_STATE_DIR CODEX_HOME CLAUDE_DIR CURSOR_DIR
+  unset AW_STATE_ROOT AW_STATE_DIR CODEX_HOME CLAUDE_DIR CLAUDE_CONFIG_DIR CURSOR_DIR
   # shellcheck source=../lib.sh
   source "$ROOT/providers/lib.sh"
   source "$ROOT/config/lib/install-agents.sh"
@@ -386,6 +386,53 @@ test_darwin_only_mcp_json_copy() {
   echo "PASS: test_darwin_only_mcp_json_copy"
 }
 
+# CLAUDE_CONFIG_DIR relocates Claude Code's config dir: skills, settings, statusline, shell integration and every hook
+# land in it, the commands in settings.json name it, ~/.claude.json is read from it, and nothing is written to
+# ~/.claude.
+test_claude_config_dir_relocates_the_install() {
+  setup_env
+  local pool="$SANDBOX/pool" f cmds
+  export CLAUDE_CONFIG_DIR="$pool"
+  unset CLAUDE_DIR
+  source "$ROOT/providers/claude/install.sh"
+  [ "$CLAUDE_DIR" = "$pool" ] || fail "CLAUDE_DIR is $CLAUDE_DIR, not CLAUDE_CONFIG_DIR"
+  [ "$(claude_skills_dir)" = "$pool/skills" ] || fail "skills dir ignores CLAUDE_CONFIG_DIR"
+  [ "$(claude_agents_dir)" = "$pool/agents" ] || fail "agents dir ignores CLAUDE_CONFIG_DIR"
+  : > "$HOME/.zshrc"
+  mkdir -p "$SANDBOX/fakebin"; printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/fakebin/judge"; chmod +x "$SANDBOX/fakebin/judge"
+  aw_install_skills_into "$(claude_skills_dir)" </dev/null >/dev/null
+  claude_install_settings >/dev/null 2>&1 || fail "settings install failed"
+  # Every lever but the live pane (it runs the real claude CLI).
+  PATH="$SANDBOX/fakebin:$PATH" AW_LEVER_INSTALLERS="install-wake-gating install-context-guard install-scope-gate install-done-gate install-external-write-guard" \
+    claude_install_hooks >/dev/null 2>&1 || fail "hooks install failed"
+  claude_install_shell_integration >/dev/null 2>&1 || fail "shell integration failed"
+  f="$pool/settings.json"
+  [ "$(readlink "$pool/skills/review")" = "$ROOT/skills/review" ] || fail "skill not linked into CLAUDE_CONFIG_DIR"
+  [ -x "$pool/statusline.sh" ] && [ -x "$pool/hooks/block-destructive.sh" ] && [ -x "$pool/hooks/done-gate.sh" ] \
+    && [ -x "$pool/hooks/judge-health.sh" ] && [ -f "$pool/shell-integration.sh" ] || fail "files missing from CLAUDE_CONFIG_DIR"
+  cmds="$(jq -r '[.statusLine.command, (.hooks[][].hooks[].command)] | .[]' "$f")"
+  echo "$cmds" | has "$pool/hooks/block-destructive.sh" || fail "safety hook command does not name CLAUDE_CONFIG_DIR"
+  echo "$cmds" | has "$pool/hooks/git-context.sh" || fail "SessionStart command does not name CLAUDE_CONFIG_DIR"
+  echo "$cmds" | has "$pool/hooks/done-gate.sh # aw:done-gate" || fail "lever command does not name CLAUDE_CONFIG_DIR"
+  [ "$(jq -r '.statusLine.command' "$f")" = "$pool/statusline.sh" ] || fail "statusLine does not name CLAUDE_CONFIG_DIR"
+  echo "$cmds" | grep -q '\.claude/' && fail "a command still names ~/.claude: $(echo "$cmds" | grep '\.claude/')"
+  # Run time: the pid/width files the shell integration writes are the ones the aw:winch hook and statusline read.
+  grep -qF "$pool/shell_pid.d/" "$pool/shell-integration.sh" || fail "shell integration does not write to CLAUDE_CONFIG_DIR"
+  jq -e --arg p "$pool/shell_pid.d/" '[.hooks.Stop[].hooks[].command | select(endswith("# aw:winch"))] | length == 1 and (.[0] | contains($p))' "$f" >/dev/null \
+    || fail "aw:winch hook does not read CLAUDE_CONFIG_DIR"
+  grep -qF "source $pool/shell-integration.sh" "$HOME/.zshrc" || fail "rc line does not source CLAUDE_CONFIG_DIR's shell integration"
+  claude_install_shell_integration >/dev/null 2>&1
+  [ "$(grep -c 'shell-integration.sh' "$HOME/.zshrc")" = 1 ] || fail "rc line added twice"
+  # The root dotfile is CLAUDE_CONFIG_DIR/.claude.json.
+  jq -n '{mcpServers: {serena: {command: "x"}}}' > "$pool/.claude.json"
+  AW_DRY_RUN=1 claude_mcp_present serena || fail "MCP presence not read from CLAUDE_CONFIG_DIR/.claude.json"
+  [ ! -e "$HOME/.claude" ] || fail "wrote under \$HOME/.claude: $(find "$HOME/.claude" | head -5)"
+  [ ! -e "$HOME/.claude.json" ] || fail "wrote \$HOME/.claude.json"
+  unset CLAUDE_CONFIG_DIR
+  teardown_env
+  echo "PASS: test_claude_config_dir_relocates_the_install"
+}
+
 test_links_managed_and_bootstrap_then_is_idempotent
 test_darwin_only_mcp_json_copy
 test_state_root_follows_aw_state_dir
@@ -405,3 +452,4 @@ test_agents_render_per_provider
 test_builds_skill_packages_and_warns_on_failure
 test_real_skill_packages_are_the_ones_with_package_json
 test_resize_hooks_migrate_to_tagged_per_tty_entries
+test_claude_config_dir_relocates_the_install

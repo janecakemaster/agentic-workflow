@@ -6,8 +6,10 @@
 # Off switch: AW_FLEET_DISABLE=1 in a session, or this script with --uninstall (the state files stay; the collector prunes them).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+# shellcheck source=../config/lib/claude-dir.sh
+source "$ROOT/config/lib/claude-dir.sh"
+SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
 # shellcheck source=../config/lib/merge-hook.sh
 source "$ROOT/config/lib/merge-hook.sh"
 # shellcheck source=../config/hooks/adapters/install-lib.sh

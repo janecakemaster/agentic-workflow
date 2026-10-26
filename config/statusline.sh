@@ -23,7 +23,8 @@ INPUT=$(cat)
 # Everything is per window: several Claude Code sessions run at once and share no state.
 #   1. ancestor-tty: size of the controlling tty of the nearest ancestor process that has one,
 #      i.e. the terminal THIS Claude Code session runs in.
-#   2. terminal_width.d/<tty>: that same tty's file from shell-integration.sh.
+#   2. terminal_width.d/<tty>: that same tty's file from shell-integration.sh, in Claude Code's config dir
+#      ($CLAUDE_CONFIG_DIR when set, else ~/.claude: where the installer pointed shell-integration.sh).
 #   3. no ancestor tty at all: legacy global ~/.claude/terminal_width (old installs only;
 #      the shell integration no longer writes it), then stty </dev/tty, $COLUMNS, 200.
 # Test overrides: AW_STATUSLINE_TTY (tty name, empty = none) replaces the ancestor lookup;
@@ -53,6 +54,7 @@ tty_cols() { # tty name -> columns
 }
 valid_cols() { [ -n "$1" ] && [ "$1" -gt 0 ] 2>/dev/null; }
 
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 COLS=""; COLS_SRC=""
 if [ -n "${AW_STATUSLINE_TTY+x}" ]; then ATTY=$AW_STATUSLINE_TTY; else ATTY=$(ancestor_tty); fi
 if [ -n "$ATTY" ]; then
@@ -61,10 +63,10 @@ if [ -n "$ATTY" ]; then
     # Brief pause so the shell's WINCH trap can write this tty's file after a resize
     # (Claude Code re-renders immediately); only this fallback needs it.
     sleep 0.05
-    COLS=$(cat "$HOME/.claude/terminal_width.d/$ATTY" 2>/dev/null); COLS_SRC=terminal_width.d
+    COLS=$(cat "$CLAUDE_DIR/terminal_width.d/$ATTY" 2>/dev/null); COLS_SRC=terminal_width.d
   fi
 else
-  COLS=$(cat "$HOME/.claude/terminal_width" 2>/dev/null); COLS_SRC=terminal_width-legacy
+  COLS=$(cat "$CLAUDE_DIR/terminal_width" 2>/dev/null); COLS_SRC=terminal_width-legacy
 fi
 if ! valid_cols "$COLS"; then
   COLS_SRC=stty-dev-tty

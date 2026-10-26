@@ -3,6 +3,7 @@
 # on a private tmux server, resume-by-id vs a fresh start, and the meta lane's role-set. A stub stands in for claude.
 # Run: bash scripts/tests/meta-launch.test.sh
 set -uo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fail=0
 check() {

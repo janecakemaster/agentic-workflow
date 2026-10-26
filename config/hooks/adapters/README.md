@@ -24,7 +24,7 @@ host's allow/deny protocol. `--raw` skips the input conversion (used by the prob
 
 | Provider | Hook config | Scripts copied to | Base installer |
 |----------|-------------|-------------------|----------------|
-| Claude Code | `~/.claude/settings.json` | `~/.claude/hooks/` (unchanged) | `providers/claude/install-hooks.sh` |
+| Claude Code | `~/.claude/settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` when set) | `~/.claude/hooks/` (`$CLAUDE_CONFIG_DIR/hooks/` when set) | `providers/claude/install-hooks.sh` |
 | Codex | `~/.codex/hooks.json` | `~/.agentic-workflow/hooks/` (+ `adapters/`, `lib/locks.sh`) | `providers/codex/install-hooks.sh` |
 | Cursor | `~/.cursor/hooks.json` | `~/.agentic-workflow/hooks/` (+ `adapters/`, `lib/locks.sh`) | `providers/cursor/install-hooks.sh` |
 

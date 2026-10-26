@@ -2,6 +2,7 @@
 # Tests for scripts/install-live-pane.sh. A stub `claude` records every call and keeps a
 # tiny marketplace/plugin state, so nothing here touches a real Claude Code config.
 set -euo pipefail
+unset CLAUDE_CONFIG_DIR  # the caller's Claude config dir must not steer an install at real files
 . "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/test-grep.sh"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"

@@ -16,8 +16,9 @@
 #                                         AW_ARGS (remaining args, bash array)
 #
 # Locations (all overridable, so tests never touch a real home dir):
-#   claude  config ${CLAUDE_SETTINGS_FILE:-~/.claude/settings.json}
-#           scripts ${CLAUDE_HOOKS_DIR:-~/.claude/hooks}
+#   claude  config ${CLAUDE_SETTINGS_FILE:-<claude dir>/settings.json}
+#           scripts ${CLAUDE_HOOKS_DIR:-<claude dir>/hooks}
+#           (<claude dir> = $CLAUDE_CONFIG_DIR, else ~/.claude; config/lib/claude-dir.sh)
 #   codex   config ${CODEX_HOOKS_FILE:-${CODEX_HOME:-~/.codex}/hooks.json}
 #           scripts ${AW_HOOKS_DIR:-${AW_STATE_DIR:-~/.agentic-workflow}/hooks}
 #   cursor  config ${CURSOR_HOOKS_FILE:-~/.cursor/hooks.json}
@@ -27,6 +28,8 @@ AW_INSTALL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AW_TOOLKIT_ROOT="$(cd "$AW_INSTALL_LIB_DIR/../../.." && pwd)"
 # shellcheck source=../../lib/merge-hook.sh
 source "$AW_TOOLKIT_ROOT/config/lib/merge-hook.sh"
+# shellcheck source=../../lib/claude-dir.sh
+source "$AW_TOOLKIT_ROOT/config/lib/claude-dir.sh"
 
 aw_parse_provider_args() {
   AW_PROVIDER="claude"
@@ -49,8 +52,8 @@ aw_hooks_init() {
   local state="${AW_STATE_DIR:-$HOME/.agentic-workflow}"
   case "$AW_HOOK_PROVIDER" in
     claude)
-      AW_HOOKS_CONFIG="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-      AW_HOOKS_INSTALL_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+      AW_HOOKS_CONFIG="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+      AW_HOOKS_INSTALL_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
       AW_HOOKS_FLAT=0 ;;
     codex)
       AW_HOOKS_CONFIG="${CODEX_HOOKS_FILE:-${CODEX_HOME:-$HOME/.codex}/hooks.json}"

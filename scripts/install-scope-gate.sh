@@ -4,8 +4,10 @@
 # of install-wake-gating.sh — never folded into install-judge.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
-HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$HOME/.claude/hooks}"
+# shellcheck source=../config/lib/claude-dir.sh
+source "$ROOT/config/lib/claude-dir.sh"
+SETTINGS_FILE="${CLAUDE_SETTINGS_FILE:-$(aw_claude_dir)/settings.json}"
+HOOKS_DIR="${CLAUDE_HOOKS_DIR:-$(aw_claude_dir)/hooks}"
 JUDGE_BIN="${AW_JUDGE_BIN:-judge}"
 # shellcheck source=../config/lib/merge-hook.sh
 source "$ROOT/config/lib/merge-hook.sh"

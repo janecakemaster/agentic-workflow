@@ -17,6 +17,7 @@ assert_not_contains() { if grep -qF -- "$2" <<<"$1"; then bad "$3 (found: $2)"; 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"
+unset CLAUDE_CONFIG_DIR
 export AW_STATE_DIR="$TMP/state"
 mkdir -p "$HOME/.claude" "$TMP/bin" "$AW_STATE_DIR/scorer/live"
 STRICT_PATH="/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"
@@ -75,6 +76,9 @@ echo 120 >"$HOME/.claude/terminal_width.d/ttysZ"
 w=$(wrun ttysZ 1)
 assert_contains "$w" "width: 120 (source: terminal_width.d)" "tty without size: falls back to its own terminal_width.d file"
 rm "$HOME/.claude/terminal_width.d/ttysZ"
+mkdir -p "$TMP/pool/terminal_width.d"; echo 130 >"$TMP/pool/terminal_width.d/ttysZ"
+w=$(CLAUDE_CONFIG_DIR="$TMP/pool" wrun ttysZ 1)
+assert_contains "$w" "width: 130 (source: terminal_width.d)" "CLAUDE_CONFIG_DIR: the per-tty file is read from that dir"
 w=$(wrun ttysZ 1)
 assert_not_contains "$w" "terminal_width-legacy" "tty with no size and no file never reads the global file"
 echo 120 >"$HOME/.claude/terminal_width"
